@@ -1,22 +1,48 @@
 package server
 
-import "github.com/gin-gonic/gin"
+import (
+	"os"
 
-// NewRouter ...
-func NewRouter() (*gin.Engine, error) {
-	// Creates a router without any middleware by default
+	"github.com/bradford-hamilton/cloudkit-core/internal/storage"
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	ginlogrus "github.com/toorop/gin-logrus"
+)
+
+// New ...
+func New(log *logrus.Logger, db storage.Datastore) (*API, error) {
+	// Creates a router with no default middleware
 	r := gin.New()
 
-	// Logger middleware will write the logs to gin.DefaultWriter even if you set with GIN_MODE=release.
-	// By default gin.DefaultWriter = os.Stdout
-	r.Use(gin.Logger())
-	// Recovery middleware recovers from any panics and writes a 500 if there was one.
-	r.Use(gin.Recovery())
+	r.Use(
+		ginlogrus.Logger(log), // Integrate logging through logrus
+		gin.Recovery(),        // recovers from any panics and writes a 500 if there was one.
+	)
 
-	// Routes
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "pong"})
-	})
+	baseURL := "http://localhost:4000"
+	if os.Getenv("CLOUDKIT_CORE_ENVIRONMENT") == "production" {
+		baseURL = "TODO"
+	}
 
-	return r, nil
+	a := API{
+		Router:  r,
+		logger:  log,
+		baseURL: baseURL,
+		db:      db,
+	}
+	a.initializeRoutes()
+
+	return &a, nil
+}
+
+func (a *API) initializeRoutes() {
+	a.Router.GET("/ping", a.ping)
+}
+
+// API ...
+type API struct {
+	Router  *gin.Engine
+	db      storage.Datastore
+	logger  *logrus.Logger
+	baseURL string
 }
