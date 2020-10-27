@@ -9,6 +9,14 @@ import (
 	ginlogrus "github.com/toorop/gin-logrus"
 )
 
+// API ...
+type API struct {
+	router  *gin.Engine
+	db      storage.Datastore
+	logger  *logrus.Logger
+	baseURL string
+}
+
 // New ...
 func New(log *logrus.Logger, db storage.Datastore) (*API, error) {
 	// Creates a router with no default middleware
@@ -25,7 +33,7 @@ func New(log *logrus.Logger, db storage.Datastore) (*API, error) {
 	}
 
 	a := API{
-		Router:  r,
+		router:  r,
 		logger:  log,
 		baseURL: baseURL,
 		db:      db,
@@ -36,13 +44,10 @@ func New(log *logrus.Logger, db storage.Datastore) (*API, error) {
 }
 
 func (a *API) initializeRoutes() {
-	a.Router.GET("/ping", a.ping)
+	a.router.GET("/ping", a.ping)
 }
 
-// API ...
-type API struct {
-	Router  *gin.Engine
-	db      storage.Datastore
-	logger  *logrus.Logger
-	baseURL string
+// Router ...
+func (a *API) Router() *gin.Engine {
+	return a.router
 }

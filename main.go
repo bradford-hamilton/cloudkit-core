@@ -18,7 +18,7 @@ func main() {
 	log := logrus.New()
 	log.WithFields(nil).Info("Application initializing...")
 
-	db, err := storage.NewPostgres()
+	db, err := storage.NewDatabase()
 	if err != nil {
 		log.Panicf("failed to initialize PostgreSQL connection", err)
 	}
@@ -28,7 +28,7 @@ func main() {
 		log.Panicf("failed to initialize new router", err)
 	}
 
-	httpSrv := &http.Server{Addr: ":4000", Handler: srv.Router}
+	httpSrv := &http.Server{Addr: ":4000", Handler: srv.Router()}
 
 	// Initialize server in a goroutine so we don't block the graceful shutdown handling below.
 	go func() {
@@ -53,7 +53,7 @@ func main() {
 	// the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := httpSrv.Shutdown(ctx); err != nil {
 		log.Fatal("Server forced to shutdown:", err)
 	}
 }
