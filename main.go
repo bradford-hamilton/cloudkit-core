@@ -14,7 +14,10 @@ import (
 )
 
 func main() {
+	// TODO: env var check
+	// TODO: switch gin to release (prod) mode in prod
 	// TODO: hooks, config, etc for logging
+
 	log := logrus.New()
 	log.WithFields(nil).Info("Application initializing...")
 
@@ -23,7 +26,7 @@ func main() {
 		log.Panicf("failed to initialize PostgreSQL connection", err)
 	}
 
-	srv, err := server.New(log, db)
+	srv, err := server.New(db, log)
 	if err != nil {
 		log.Panicf("failed to initialize new router", err)
 	}
@@ -37,15 +40,9 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown the server with
-	// a timeout of 5 seconds.
+	// Wait for interrupt signal to gracefully shutdown
 	sig := make(chan os.Signal)
-
-	// kill (no param) default send syscall.SIGTERM
-	// kill -2 is syscall.SIGINT
-	// kill -9 is syscall.SIGKILL but can't be catch, so don't need add it
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-
 	<-sig
 	log.Println("Shutting down server...")
 

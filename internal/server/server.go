@@ -18,36 +18,26 @@ type API struct {
 }
 
 // New ...
-func New(log *logrus.Logger, db storage.Datastore) (*API, error) {
-	// Creates a router with no default middleware
+func New(db storage.Datastore, log *logrus.Logger) (*API, error) {
 	r := gin.New()
+	r.Use(ginlogrus.Logger(log), gin.Recovery())
 
-	r.Use(
-		ginlogrus.Logger(log), // Integrate logging through logrus
-		gin.Recovery(),        // recovers from any panics and writes a 500 if there was one.
-	)
-
-	baseURL := "http://localhost:4000"
-	if os.Getenv("CLOUDKIT_CORE_ENVIRONMENT") == "production" {
-		baseURL = "TODO"
-	}
-
-	a := API{
+	api := API{
 		router:  r,
 		logger:  log,
-		baseURL: baseURL,
+		baseURL: os.Getenv("CLOUDKIT_BASE_URL"),
 		db:      db,
 	}
-	a.initializeRoutes()
+	api.initializeRoutes()
 
-	return &a, nil
+	return &api, nil
 }
 
 func (a *API) initializeRoutes() {
 	a.router.GET("/ping", a.ping)
 }
 
-// Router ...
+// Router returns access to the router (*gin.Engine) field
 func (a *API) Router() *gin.Engine {
 	return a.router
 }

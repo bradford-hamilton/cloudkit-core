@@ -28,7 +28,6 @@ func NewDatabase() (*Database, error) {
 		os.Getenv("CLOUDKIT_DB_NAME"),
 		os.Getenv("CLOUDKIT_SSL_MODE"),
 	)
-
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, err
