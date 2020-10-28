@@ -9,15 +9,16 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// Datastore ...
+// Datastore descirbes all the behaviors the persistance layer must implement.
 type Datastore interface{}
 
-// Database ...
+// Database implements our Datastore interface.
 type Database struct {
 	*sql.DB
 }
 
-// NewDatabase ...
+// NewDatabase aquires a connection to Postgres, embeds it in a Database, and pings
+// the db before returning it.
 func NewDatabase() (*Database, error) {
 	connStr := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",

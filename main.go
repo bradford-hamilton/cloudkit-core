@@ -26,11 +26,7 @@ func main() {
 		log.Panicf("failed to initialize PostgreSQL connection", err)
 	}
 
-	srv, err := server.New(db, log)
-	if err != nil {
-		log.Panicf("failed to initialize new router", err)
-	}
-
+	srv := server.New(db, log)
 	httpSrv := &http.Server{Addr: ":4000", Handler: srv.Router()}
 
 	// Initialize server in a goroutine so we don't block the graceful shutdown handling below.

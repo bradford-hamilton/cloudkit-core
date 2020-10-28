@@ -6,6 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (a *API) ping(c *gin.Context) {
+func (a *App) ping(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "pong"})
 }
