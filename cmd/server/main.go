@@ -8,10 +8,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bradford-hamilton/cloudkit-core/internal/cloudkit"
 	"github.com/bradford-hamilton/cloudkit-core/internal/server"
 	"github.com/bradford-hamilton/cloudkit-core/internal/storage"
 	"github.com/sirupsen/logrus"
 )
+
+const tmpConnStr = "206.189.218.106:16509"
 
 func main() {
 	// TODO: env var check
@@ -26,8 +29,13 @@ func main() {
 		log.Panicf("failed to initialize PostgreSQL connection", err)
 	}
 
-	srv := server.New(db, log)
-	httpSrv := &http.Server{Addr: ":4000", Handler: srv.Router()}
+	ckm, err := cloudkit.NewVMManager(tmpConnStr, log)
+	if err != nil {
+		log.Panicf("failed to initialize new cloudkit", err)
+	}
+
+	app := server.New(ckm, db, log)
+	httpSrv := &http.Server{Addr: ":4000", Handler: app.Router()}
 
 	// Initialize server in a goroutine so we don't block the graceful shutdown handling below.
 	go func() {
