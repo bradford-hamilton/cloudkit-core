@@ -80,18 +80,13 @@ func (v *VMManager) GetVMs() ([]libvirt.Domain, error) {
 func defaultDomain() libvirtxml.Domain {
 	return libvirtxml.Domain{
 		Type: "kvm",
-		Name: "Ubuntu-Server-20.04",
+		Name: "ubuntu-bionic",
 		OS: &libvirtxml.DomainOS{
 			Type: &libvirtxml.DomainOSType{Type: "hvm"},
-			BootDevices: []libvirtxml.DomainBootDevice{{
-				Dev: "cdrom",
-			}, {
-				Dev: "hd",
-			}},
 		},
 		Memory: &libvirtxml.DomainMemory{
 			Unit:  "MiB",
-			Value: 512,
+			Value: 1024,
 		},
 		VCPU: &libvirtxml.DomainVCPU{
 			Placement: "static",
@@ -99,11 +94,15 @@ func defaultDomain() libvirtxml.Domain {
 		},
 		CPU: &libvirtxml.DomainCPU{},
 		Devices: &libvirtxml.DomainDeviceList{
-			Emulator: "/usr/bin/qemu-system-x86_64",
-			Graphics: []libvirtxml.DomainGraphic{{
-				VNC: &libvirtxml.DomainGraphicVNC{},
-			}},
+			// Emulator: "/usr/bin/qemu-system-x86_64",
+			// Graphics: []libvirtxml.DomainGraphic{{
+			// 	VNC: &libvirtxml.DomainGraphicVNC{},
+			// }},
+			Graphics: []libvirtxml.DomainGraphic{},
 			Interfaces: []libvirtxml.DomainInterface{{
+				Model: &libvirtxml.DomainInterfaceModel{
+					Type: "virtio",
+				},
 				Source: &libvirtxml.DomainInterfaceSource{
 					Network: &libvirtxml.DomainInterfaceSourceNetwork{
 						Network: "default",
@@ -119,31 +118,29 @@ func defaultDomain() libvirtxml.Domain {
 			}},
 			Disks: []libvirtxml.DomainDisk{{
 				Driver: &libvirtxml.DomainDiskDriver{
-					Name: "qemu",
 					Type: "raw",
 				},
 				Source: &libvirtxml.DomainDiskSource{
 					File: &libvirtxml.DomainDiskSourceFile{
-						File: "/var/lib/libvirt/images/ubuntu-20.04.1-live-server-amd64.iso",
-					},
-				},
-				Target: &libvirtxml.DomainDiskTarget{
-					Dev: "hdc",
-					Bus: "ide",
-				},
-			}, {
-				Driver: &libvirtxml.DomainDiskDriver{
-					Name: "qemu",
-					Type: "qcow2",
-				},
-				Source: &libvirtxml.DomainDiskSource{
-					File: &libvirtxml.DomainDiskSourceFile{
-						File: "/var/lib/libvirt/images/ubuntu-server.qcow2",
+						File: "/var/lib/libvirt/images/ubuntu-bionic.img",
 					},
 				},
 				Target: &libvirtxml.DomainDiskTarget{
 					Dev: "vda",
 					Bus: "virtio",
+				},
+			}, {
+				Driver: &libvirtxml.DomainDiskDriver{
+					Type: "raw",
+				},
+				Source: &libvirtxml.DomainDiskSource{
+					File: &libvirtxml.DomainDiskSourceFile{
+						File: "/var/lib/libvirt/images/ubuntu-bionic.iso",
+					},
+				},
+				Target: &libvirtxml.DomainDiskTarget{
+					Dev: "hdc",
+					Bus: "ide",
 				},
 			}},
 		},
