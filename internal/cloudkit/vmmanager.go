@@ -45,6 +45,12 @@ type VMManager struct {
 	logger  *logrus.Logger
 }
 
+// MemUsage ...
+type MemUsage struct {
+	Time  string  `json:"time,omitempty"`
+	Usage float64 `json:"usage"`
+}
+
 // NewVMManager creates a tcp connection to libvirt on the host machines.
 func NewVMManager(hostLibvirtConnStr string, log *logrus.Logger) (*VMManager, error) {
 	protocol := "tcp"

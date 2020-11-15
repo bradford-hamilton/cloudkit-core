@@ -46,7 +46,7 @@ func main() {
 
 	// Spin off go routine that scrapes memory metrics from all active VMs for client charts.
 	go func() {
-		uptimeTicker := time.NewTicker(10 * time.Second)
+		uptimeTicker := time.NewTicker(1 * time.Minute)
 		// uptimeTicker := time.NewTicker(10 * time.Minute)
 		for {
 			select {

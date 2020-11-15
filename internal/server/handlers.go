@@ -21,7 +21,7 @@ func (a *App) getVMs(c *gin.Context) {
 
 // GetVMByDomainIDReq describes request needed to get VM by its ID.
 type GetVMByDomainIDReq struct {
-	// ID is the only requirement for fetching a VM.
+	// DomainID is the only requirement for fetching a VM.
 	DomainID int `uri:"domain_id" binding:"required"`
 }
 
@@ -38,7 +38,19 @@ func (a *App) getVMByDomainID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{"vm": vm}})
+	id, err := a.storage.GetVMIDFromDomainID(vm.DomainID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	usages, err := a.storage.GetLast12HoursVMMemoryUsage(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"vm": vm, "memory_usage": usages}})
 }
 
 // CreateVMReq defines the shape of the JSON request needed from the front end to create a VM.

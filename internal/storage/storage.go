@@ -17,6 +17,7 @@ type Datastore interface {
 	CreateVM(vm cloudkit.VM) (int, error)
 	RecordVMMemory(domainID int, usage float64) error
 	GetVMIDFromDomainID(domainID int) (int, error)
+	GetLast12HoursVMMemoryUsage(vmID int) ([]cloudkit.MemUsage, error)
 }
 
 // Database implements our Datastore interface.
@@ -63,7 +64,7 @@ func (db *Database) CreateVM(vm cloudkit.VM) (int, error) {
 	return id, nil
 }
 
-// GetVMIDFromDomainID ....
+// GetVMIDFromDomainID gets a domain's storage ID by its domain_id.
 func (db *Database) GetVMIDFromDomainID(domainID int) (int, error) {
 	var id int
 	query := `SELECT id FROM vms WHERE domain_id = $1;`
@@ -93,4 +94,25 @@ func (db *Database) RecordVMMemory(domainID int, usage float64) error {
 	}
 
 	return nil
+}
+
+// GetLast12HoursVMMemoryUsage ...
+func (db *Database) GetLast12HoursVMMemoryUsage(vmID int) ([]cloudkit.MemUsage, error) {
+	var usages []cloudkit.MemUsage
+	query := `SELECT time, mem_usage FROM measurements WHERE vm_id = $1 ORDER BY time DESC LIMIT 12;`
+
+	rows, err := db.Query(query, vmID)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var m cloudkit.MemUsage
+		if err := rows.Scan(&m.Time, &m.Usage); err != nil {
+			return nil, err
+		}
+		usages = append(usages, m)
+	}
+
+	return usages, nil
 }
