@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
 	"strings"
 	"time"
 
@@ -20,6 +19,7 @@ import (
 // VM represents a VM as understood by cloudkit
 type VM struct {
 	ID         int                         `json:"id,omitempty"`
+	DomainID   int                         `json:"domain_id,omitempty"`
 	Name       string                      `json:"name,omitempty"`
 	State      string                      `json:"state"`
 	IP         string                      `json:"ip,omitempty"`
@@ -33,8 +33,9 @@ type VM struct {
 
 // VMController describes all the actions you can take on a VM.
 type VMController interface {
-	CreateVM(machineType string, memoryInGB int, vCPUs int) error
+	CreateVM(machineType string, memoryInGB int, vCPUs int) (VM, error)
 	GetRunningVMs() ([]VM, error)
+	GetVMByDomainID(domainID int) (VM, error)
 }
 
 // VMManager imlements the VMController interface and handles
@@ -68,76 +69,17 @@ func NewVMManager(hostLibvirtConnStr string, log *logrus.Logger) (*VMManager, er
 
 // GetRunningVMs asks libvirt for current domains and returns them.
 func (v *VMManager) GetRunningVMs() ([]VM, error) {
-	net, err := v.libvirt.NetworkLookupByName("default")
-	if err != nil {
-		return nil, err
-	}
-
 	dms, err := v.libvirt.Domains()
 	if err != nil {
-		return nil, err
+		return []VM{}, err
 	}
 
 	var runningVMs []VM
 	for i := range dms {
 		if dms[i].ID != -1 {
-			rXML, err := v.libvirt.DomainGetXMLDesc(dms[i], 0)
+			vm, err := v.ckVMFromDomain(dms[i], "default")
 			if err != nil {
-				return nil, err
-			}
-
-			domcfg := &libvirtxml.Domain{}
-			if err := domcfg.Unmarshal(rXML); err != nil {
-				return nil, err
-			}
-
-			var macAddr string
-			for _, val := range domcfg.Devices.Interfaces {
-				if val.Source.Network.Network == "default" {
-					macAddr = val.MAC.Address
-				}
-			}
-			if macAddr == "" {
-				macAddr = "pending"
-			}
-
-			ip := "pending"
-			if macAddr != "pending" {
-				m := libvirt.OptString{macAddr}
-				leases, _, err := v.libvirt.NetworkGetDhcpLeases(net, m, 1, 0)
-				if err != nil {
-					return nil, err
-				}
-				for _, val := range leases {
-					if len(val.Mac) == 0 {
-						continue
-					} else if val.Mac[0] == macAddr {
-						ip = val.Ipaddr
-					}
-				}
-			}
-
-			st, maxMem, mem, rNrVirtCPU, cpuTime, err := v.libvirt.DomainGetInfo(dms[i])
-			fmt.Println(st, maxMem, mem, rNrVirtCPU, cpuTime, err)
-
-			state, _, err := v.libvirt.DomainGetState(dms[i], 0)
-			if err != nil {
-				return nil, err
-			}
-
-			vm := VM{
-				ID:    int(dms[i].ID),
-				Name:  dms[i].Name,
-				State: domainState(state),
-				// TODO once I figure out networking they will get their own IP...
-				// For now we have to search for the dhcp lease above and strip it.
-				IP:         ip,
-				MAC:        macAddr,
-				Mem:        int(domcfg.Memory.Value),
-				CurrentMem: int(domcfg.CurrentMemory.Value),
-				VCPUs:      int(domcfg.VCPU.Value),
-				Type:       *domcfg.OS.Type,
-				Devices:    *domcfg.Devices,
+				return []VM{}, err
 			}
 			runningVMs = append(runningVMs, vm)
 		}
@@ -146,31 +88,112 @@ func (v *VMManager) GetRunningVMs() ([]VM, error) {
 	return runningVMs, nil
 }
 
+// GetVMByDomainID takes a libvirt domain ID and returns a new VM hydrated with its data.
+func (v *VMManager) GetVMByDomainID(domainID int) (VM, error) {
+	domain, err := v.libvirt.DomainLookupByID(int32(domainID))
+	if err != nil {
+		return VM{}, err
+	}
+	vm, err := v.ckVMFromDomain(domain, "default")
+	if err != nil {
+		return VM{}, err
+	}
+	return vm, nil
+}
+
 // CreateVM currently handles spinning up the default ubuntu bionic VM
-func (v *VMManager) CreateVM(machineType string, memoryInGB int, vCPUs int) error {
+func (v *VMManager) CreateVM(machineType string, memoryInGB int, vCPUs int) (VM, error) {
 	id := shortuuid.New()
 
-	pk, err := pubKey(os.Getenv("PUBKEY_LOCATION"))
+	pk, err := aquirePubKeyAuth("/Users/bradford/.ssh/id_rsa")
 	if err != nil {
-		return err
+		return VM{}, err
 	}
 
 	if err := prepareHostWithUbuntuDisks(pk, id); err != nil {
-		return err
+		return VM{}, err
 	}
 
 	b, err := xml.Marshal(buildDomainXML(id, machineType, memoryInGB, vCPUs))
 	if err != nil {
-		return err
+		return VM{}, err
 	}
 
 	domain, err := v.libvirt.DomainCreateXML(string(b), 0)
 	if err != nil {
-		return err
+		return VM{}, err
 	}
 	fmt.Printf("domain: %+v", domain)
 
-	return err
+	vm, err := v.ckVMFromDomain(domain, "default")
+	if err != nil {
+		return VM{}, err
+	}
+
+	return vm, nil
+}
+
+func (v *VMManager) ckVMFromDomain(domain libvirt.Domain, network string) (VM, error) {
+	rXML, err := v.libvirt.DomainGetXMLDesc(domain, 0)
+	if err != nil {
+		return VM{}, err
+	}
+
+	domcfg := &libvirtxml.Domain{}
+	if err := domcfg.Unmarshal(rXML); err != nil {
+		return VM{}, err
+	}
+
+	state, _, err := v.libvirt.DomainGetState(domain, 0)
+	if err != nil {
+		return VM{}, err
+	}
+
+	net, err := v.libvirt.NetworkLookupByName(network)
+	if err != nil {
+		return VM{}, err
+	}
+
+	var macAddr string
+	for _, val := range domcfg.Devices.Interfaces {
+		if val.Source.Network.Network == network {
+			macAddr = val.MAC.Address
+		}
+	}
+	if macAddr == "" {
+		macAddr = "pending"
+	}
+
+	ip := "pending"
+	if macAddr != "pending" {
+		m := libvirt.OptString{macAddr}
+		leases, _, err := v.libvirt.NetworkGetDhcpLeases(net, m, 1, 0)
+		if err != nil {
+			return VM{}, err
+		}
+		for _, val := range leases {
+			if len(val.Mac) == 0 {
+				continue
+			} else if val.Mac[0] == macAddr {
+				ip = val.Ipaddr
+			}
+		}
+	}
+
+	vm := VM{
+		DomainID:   int(domain.ID),
+		Name:       domain.Name,
+		State:      domainState(state),
+		IP:         ip,
+		MAC:        macAddr,
+		Mem:        int(domcfg.Memory.Value),
+		CurrentMem: int(domcfg.CurrentMemory.Value),
+		VCPUs:      int(domcfg.VCPU.Value),
+		Type:       *domcfg.OS.Type,
+		Devices:    *domcfg.Devices,
+	}
+
+	return vm, nil
 }
 
 func domainState(state int32) string {
@@ -196,7 +219,7 @@ func domainState(state int32) string {
 	}
 }
 
-func pubKey(path string) (ssh.AuthMethod, error) {
+func aquirePubKeyAuth(path string) (ssh.AuthMethod, error) {
 	key, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err

@@ -16,7 +16,7 @@ import (
 type App struct {
 	router  *gin.Engine
 	manager cloudkit.VMController
-	db      storage.Datastore
+	storage storage.Datastore
 	logger  *logrus.Logger
 	baseURL string
 }
@@ -29,7 +29,7 @@ func New(ckm cloudkit.VMController, db storage.Datastore, log *logrus.Logger) *A
 
 	app := App{
 		router:  r,
-		db:      db,
+		storage: db,
 		manager: ckm,
 		logger:  log,
 		baseURL: os.Getenv("CLOUDKIT_BASE_URL"),
@@ -46,6 +46,7 @@ func (a *App) initializeRoutes() {
 	{
 		v1.GET("/vms", a.getVMs)
 		v1.POST("/vms", a.createVM)
+		v1.GET("/vms/:domain_id", a.getVMByDomainID)
 	}
 }
 
