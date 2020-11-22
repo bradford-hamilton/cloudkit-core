@@ -2,7 +2,6 @@ package cloudkit
 
 import (
 	"encoding/xml"
-	"fmt"
 	"io/ioutil"
 	"net"
 	"strings"
@@ -14,6 +13,12 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	libvirtxml "libvirt.org/libvirt-go-xml"
+)
+
+// MemStatsPeriod describes the cadence (time in seconds) for capturing VM memory statistics.
+const (
+	MemStatsPeriod = 5
+	MaxStats       = 1024
 )
 
 // VM represents a VM as understood by cloudkit
@@ -35,6 +40,8 @@ type VM struct {
 type VMController interface {
 	CreateVM(machineType string, memoryInGB int, vCPUs int) (VM, error)
 	GetRunningVMs() ([]VM, error)
+	GetRunningDomains() ([]libvirt.Domain, error)
+	DomainMemoryStats(domain libvirt.Domain, maxStats uint32, flags uint32) (rStats []libvirt.DomainMemoryStat, err error)
 	GetVMByDomainID(domainID int) (VM, error)
 }
 
@@ -94,6 +101,21 @@ func (v *VMManager) GetRunningVMs() ([]VM, error) {
 	return runningVMs, nil
 }
 
+// GetRunningDomains asks libvirt for current domains and returns them.
+func (v *VMManager) GetRunningDomains() ([]libvirt.Domain, error) {
+	dms, err := v.libvirt.Domains()
+	if err != nil {
+		return nil, err
+	}
+	var rDomains []libvirt.Domain
+	for _, dm := range dms {
+		if dm.ID != -1 {
+			rDomains = append(rDomains, dm)
+		}
+	}
+	return rDomains, nil
+}
+
 // GetVMByDomainID takes a libvirt domain ID and returns a new VM hydrated with its data.
 func (v *VMManager) GetVMByDomainID(domainID int) (VM, error) {
 	domain, err := v.libvirt.DomainLookupByID(int32(domainID))
@@ -129,7 +151,11 @@ func (v *VMManager) CreateVM(machineType string, memoryInGB int, vCPUs int) (VM,
 	if err != nil {
 		return VM{}, err
 	}
-	fmt.Printf("domain: %+v", domain)
+
+	v.libvirt.DomainSetMemoryStatsPeriod(domain, MemStatsPeriod, 0)
+	if err != nil {
+		return VM{}, err
+	}
 
 	vm, err := v.ckVMFromDomain(domain, "default")
 	if err != nil {
@@ -137,6 +163,11 @@ func (v *VMManager) CreateVM(machineType string, memoryInGB int, vCPUs int) (VM,
 	}
 
 	return vm, nil
+}
+
+// DomainMemoryStats is current just a wrapper for libvirt's DomainMemoryStats func.
+func (v *VMManager) DomainMemoryStats(dom libvirt.Domain, maxStats uint32, flags uint32) (rStats []libvirt.DomainMemoryStat, err error) {
+	return v.libvirt.DomainMemoryStats(dom, maxStats, flags)
 }
 
 func (v *VMManager) ckVMFromDomain(domain libvirt.Domain, network string) (VM, error) {
@@ -225,8 +256,8 @@ func domainState(state int32) string {
 	}
 }
 
-func aquirePubKeyAuth(path string) (ssh.AuthMethod, error) {
-	key, err := ioutil.ReadFile(path)
+func aquirePubKeyAuth(privKeyPath string) (ssh.AuthMethod, error) {
+	key, err := ioutil.ReadFile(privKeyPath)
 	if err != nil {
 		return nil, err
 	}

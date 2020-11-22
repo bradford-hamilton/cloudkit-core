@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 
+	"github.com/bradford-hamilton/cloudkit-core/internal/cloudkit"
 	"github.com/gin-gonic/gin"
 )
 
@@ -44,7 +45,7 @@ func (a *App) getVMByDomainID(c *gin.Context) {
 		return
 	}
 
-	usages, err := a.storage.GetLast12HoursVMMemoryUsage(id)
+	usages, err := a.storage.GetLast15MinVMMemUsage(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -84,18 +85,29 @@ func (a *App) createVM(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "success"})
 }
 
-// TakeMemorySnapshots gets the currently used percentage of total memory for each VM and
-// persists the measurements to our postgres storage... This will be used to fetch data for
-// charts on the front end.
-func (a *App) TakeMemorySnapshots() {
-	vms, err := a.manager.GetRunningVMs()
+// takeMemorySnapshots gets the currently used percentage of total memory for each VM and
+// persists the measurements to storage (postgres).
+func (a *App) takeMemorySnapshots() {
+	vms, err := a.manager.GetRunningDomains()
 	if err != nil {
 		a.logger.Errorf("failed to get running vms, err: %+v", err)
 	}
 
-	for _, vm := range vms {
-		usage := (float64(vm.Mem-vm.CurrentMem) / float64(vm.Mem)) * 100
-		if err := a.storage.RecordVMMemory(vm.DomainID, usage); err != nil {
+	for _, domain := range vms {
+		rStats, err := a.manager.DomainMemoryStats(domain, cloudkit.MaxStats, 0)
+		if err != nil {
+			a.logger.Errorf("failed to aqcuire domain memory stats, err: %+v", err)
+		}
+
+		ms, err := cloudkit.NewMemStats(rStats)
+		if err != nil {
+			a.logger.Errorf("failed to unmarshal memory stats, err: %+v", err)
+		}
+
+		usage := (float64(ms.Available-ms.Usable) / float64(ms.Available)) * 100
+
+		err = a.storage.RecordVMMemory(int(domain.ID), usage)
+		if err != nil {
 			a.logger.Errorf("failed to record VM memory, err: %+v", err)
 		}
 	}

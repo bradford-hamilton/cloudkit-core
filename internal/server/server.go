@@ -2,6 +2,7 @@ package server
 
 import (
 	"os"
+	"time"
 
 	"github.com/bradford-hamilton/cloudkit-core/internal/cloudkit"
 	"github.com/bradford-hamilton/cloudkit-core/internal/storage"
@@ -35,6 +36,7 @@ func New(ckm cloudkit.VMController, db storage.Datastore, log *logrus.Logger) *A
 		baseURL: os.Getenv("CLOUDKIT_BASE_URL"),
 	}
 	app.initializeRoutes()
+	app.runVMMonitor()
 
 	return &app
 }
@@ -53,4 +55,18 @@ func (a *App) initializeRoutes() {
 // Router returns access to the router (*gin.Engine) field.
 func (a *App) Router() *gin.Engine {
 	return a.router
+}
+
+// runVMMonitor spins off a go routine that scrapes memory metrics from all active VMs.
+// TODO: orchestrate retry logic, better error handling, graceful things, etc.
+func (a *App) runVMMonitor() {
+	go func() {
+		uptimeTicker := time.NewTicker(1 * time.Minute)
+		for {
+			select {
+			case <-uptimeTicker.C:
+				a.takeMemorySnapshots()
+			}
+		}
+	}()
 }

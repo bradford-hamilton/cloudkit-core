@@ -17,7 +17,7 @@ type Datastore interface {
 	CreateVM(vm cloudkit.VM) (int, error)
 	RecordVMMemory(domainID int, usage float64) error
 	GetVMIDFromDomainID(domainID int) (int, error)
-	GetLast12HoursVMMemoryUsage(vmID int) ([]cloudkit.MemUsage, error)
+	GetLast15MinVMMemUsage(vmID int) ([]cloudkit.MemUsage, error)
 }
 
 // Database implements our Datastore interface.
@@ -51,7 +51,7 @@ func NewDatabase() (*Database, error) {
 // CreateVM inserts a cloud kit VM into our datastore.
 func (db *Database) CreateVM(vm cloudkit.VM) (int, error) {
 	var id int
-	query := `INSERT INTO vms (name, domain_id) VALUES ($1, $2) RETURNING id;`
+	query := "INSERT INTO vms (name, domain_id) VALUES ($1, $2) RETURNING id;"
 
 	row := db.QueryRow(query, vm.Name, vm.DomainID)
 	if err := row.Err(); err != nil {
@@ -67,7 +67,7 @@ func (db *Database) CreateVM(vm cloudkit.VM) (int, error) {
 // GetVMIDFromDomainID gets a domain's storage ID by its domain_id.
 func (db *Database) GetVMIDFromDomainID(domainID int) (int, error) {
 	var id int
-	query := `SELECT id FROM vms WHERE domain_id = $1;`
+	query := "SELECT id FROM vms WHERE domain_id = $1;"
 
 	row := db.QueryRow(query, domainID)
 	if err := row.Err(); err != nil {
@@ -87,7 +87,7 @@ func (db *Database) RecordVMMemory(domainID int, usage float64) error {
 		return err
 	}
 
-	query := `INSERT INTO measurements (time, vm_id, mem_usage) VALUES ($1, $2, $3);`
+	query := "INSERT INTO measurements (time, vm_id, mem_usage) VALUES ($1, $2, $3);"
 	row := db.QueryRow(query, time.Now(), vmID, usage)
 	if err := row.Err(); err != nil {
 		return err
@@ -96,16 +96,17 @@ func (db *Database) RecordVMMemory(domainID int, usage float64) error {
 	return nil
 }
 
-// GetLast12HoursVMMemoryUsage ...
-func (db *Database) GetLast12HoursVMMemoryUsage(vmID int) ([]cloudkit.MemUsage, error) {
-	var usages []cloudkit.MemUsage
-	query := `SELECT time, mem_usage FROM measurements WHERE vm_id = $1 ORDER BY time DESC LIMIT 12;`
+// GetLast15MinVMMemUsage retrieves the last 30 minutes of a VM's usage.
+func (db *Database) GetLast15MinVMMemUsage(vmID int) ([]cloudkit.MemUsage, error) {
+	subQ := "SELECT time, mem_usage FROM measurements WHERE vm_id = $1 ORDER BY time DESC LIMIT 15"
+	query := "SELECT q.* FROM (" + subQ + ") q ORDER BY q.time ASC;"
 
 	rows, err := db.Query(query, vmID)
 	if err != nil {
 		return nil, err
 	}
 
+	var usages []cloudkit.MemUsage
 	for rows.Next() {
 		var m cloudkit.MemUsage
 		if err := rows.Scan(&m.Time, &m.Usage); err != nil {
