@@ -21,7 +21,7 @@ const (
 	MaxStats       = 1024
 )
 
-// VM represents a VM as understood by cloudkit
+// VM represents a VM as understood by cloudkit.
 type VM struct {
 	ID         int                         `json:"id,omitempty"`
 	DomainID   int                         `json:"domain_id,omitempty"`
@@ -52,7 +52,7 @@ type VMManager struct {
 	logger  *logrus.Logger
 }
 
-// MemUsage ...
+// MemUsage is a snapshot of memory usage (% of total) at a point in time on a VM.
 type MemUsage struct {
 	Time  string  `json:"time,omitempty"`
 	Usage float64 `json:"usage"`
