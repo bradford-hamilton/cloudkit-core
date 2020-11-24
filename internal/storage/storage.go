@@ -105,6 +105,7 @@ func (db *Database) GetLast15MinVMMemUsage(vmID int) ([]cloudkit.MemUsage, error
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
 	var usages []cloudkit.MemUsage
 	for rows.Next() {
