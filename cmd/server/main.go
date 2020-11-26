@@ -28,6 +28,7 @@ func main() {
 	if err != nil {
 		log.Panicf("failed to initialize PostgreSQL connection", err)
 	}
+	defer db.Close()
 
 	ckm, err := cloudkit.NewVMManager(tmpConnStr, log)
 	if err != nil {
